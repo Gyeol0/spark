@@ -670,3 +670,37 @@ avgByCust.first()
 
 * 누적 변수는 스파크 프로그램의 전역 상태를 유지
 * 공유 변수로 태그크 및 파티션이 공통으로 사용하는 데이터를 공유
+
+### 5.1 누적 변수
+
+* 더하는 연산만 가능
+
+* `SparkContext.accumulator(initialValue)` 생성
+
+* `sc.accumulator(initialValue, "accumulatorName")` 이름 지정 (파이썬은 불가)
+
+* ```python
+  acc = sc.accumulator(0)
+  l = sc.parallelize(range(1000000))
+  l.foreach(lambda x: acc.add(1))
+  acc.value
+  ```
+
+  * `acc.value` 100000
+
+* ```python
+  l.foreach(lambda x: acc.value)
+  ```
+
+  * 오류 발생
+  * 실행자가 실제로 더하는 값의 타입과 누적 변수 값의 타입이 다를 경우 `Accumulable` 객체 생성, 스파크 2.0,0 부터는 사용 불가
+
+### 5.2 공유 변수
+
+* 실행자가 수정 불가, 드라이버에서만 생성
+* 실해자는 읽기 연산만 가능
+* `SparkContext.broadcast(value)` 생성
+* `spark.broadcast.compress`공유 변수를 전송하기 전 데이터 압축 여부
+* `spark.broadcast.blockSize`공유 변수를 전송하는 데 사용하는 데이터 청크의 크기
+* `spark.pythin.worker.reuse`공유 변수 성능에 큰 영향, 워커 재사용 여부(True)
+* 공유 변수 값에 접근할 때는 항상 `value` 메서드 사용
