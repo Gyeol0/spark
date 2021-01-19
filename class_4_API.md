@@ -13,7 +13,7 @@
 
 
 
-### 2.2 기본 Pair RDD 함수
+### 1.2 기본 Pair RDD 함수
 
 > 규칙 1 구매 횟수가 가장 많은 고객에게는 곰 인형을 보낸다.
 >
@@ -238,13 +238,15 @@ prods.collect()
 * 제품 리스트를 추가, RDD의 각 파티션별로 요소를 병합
 * 키가 같은 두 제품 리스트를 이어 붙인다.
 
-### 2.2 데이터 파티셔닝과 데이터 셔플링
+
+
+## 2. 데이터 파티셔닝과 데이터 셔플링
 
 * 데이터 파티셔닝은 데이터를 여러 클러스터 노드로 분할하는 메커니즘
 * RDD별로 RDD의 파티션 목록을 보관하며, 각 파티션의 데이터를 처리할 최적 위치를 추가로 저장
 * `partitions` 필드는 Array 타입으로, `partiotions.size`피드로 파티션 개수를 알아낼 수 있다.
 
-#### 데이터 partitioner
+### 2.1 데이터 partitioner
 
 * `HashPartitioner`
 * `RangePartitioner`
@@ -252,7 +254,7 @@ prods.collect()
 * `사용자 정의 Partitioner`는 Pair RDD에만 사용 가능
 * `rdd.foldByKey(afunc, new HashPartitioner(200))`
 
-#### 데이터 셔플링
+### 2.2 데이터 셔플링
 
 * 파티션 간의 물리적인 데이터 이동
 
@@ -345,8 +347,10 @@ prods.collect()
     ```
 
     * l에 들어있는 500개의 요소를 30개의 파티션으로 나눔
+    
+    
 
-### 2.3 데이터 조인, 정렬, 그루핑
+## 3. 데이터 조인, 정렬, 그루핑
 
 ```python
 transByProd = transByCust.map(lambda ct: (int(ct[1][3]), ct[1]))
@@ -511,7 +515,7 @@ missingProds.foreach(lambda p: print(", ".join(p)))
     * True = 조인 함수가 데이터의 파티션을 보존
   * Python에는 아직 적용 불가
 
-#### 데이터 정렬
+### 3.2 데이터 정렬
 
 * `repartitionAndSortWithinPartition`
 
@@ -538,7 +542,7 @@ missingProds.foreach(lambda p: print(", ".join(p)))
   * `repartitionAndSortWithinPartition` 변환 연산자에 사용자 정의 Partitioner를 인수로 전달해 연산자를 호출, 전체 복합 키(K, V)를 기준으로 각 파티션 내 요소들을 정렬
   * 키로 먼저 정렬, 그 다음 Value로 정렬
 
-### 2.3 데이터 그루핑
+### 3.3 데이터 그루핑
 
 #### groupByKey나 groupBy 변환 연산자로 데이터 그루핑
 
@@ -603,13 +607,66 @@ avgByCust.first()
 * `lambda (mn,mx,cnt,tot): (mn,mx,cnt,tot,tot/cnt)`
   * 튜플에 상품의 평균 가격 추가
 
-### 2.4 RDD 의존 관계
+## 4. RDD 의존 관계
 
 #### RDD 의존 관계와 스파크 동작 메커니즘
 
 * 스파크의 실행 모델은 `방향성 비순환 그래프`에 기반
+
 * `DAG`
   * RDD의 의존 관계를 간선으로 정의한 그래프
-  * RDD의 변환 연산자를 호출할 때마다 새로운 정점(RDD)과 새로운 간선(의존 관계)가 생성
-  * 
+  * RDD의 변환 연산자를 호출할 때마다 새로운 정점(RDD)과 새로운 간선(의존 관계)이 생성
+  * 방향은 자식 RDD(새로운)에서 부모RDD(이전)
+  * 계보라고 한다.
+  
+* 의존 관계 유형에 따라 셔플링 실행 여부 결정
+  
+  * 조인할 때는 항상 셔플링 발생
+  
+* 좁은 의존 관계
+  * 1-대-1 의존 관계
+  
+    * 셔플링이 필요하지 않은 모든 변환 연산자
+  
+  * 범위형 의존 관계
+    * 여러 부모 RDD에 대한 의존 관계를 하나로 결합
+    * `union` 변환 연산자
+    
+  * ```python
+    import random
+    r_list = [random.randrange(10) for x in range(500)]
+    rdd1 = sc.parallelize(r_list, 5)
+    pairs_rdd1 = rdd1.map(lambda x: (x, x*x))
+    reduced = pairs_rdd1.reduceByKey(lambda x1, x2: x1+x2)
+    rdd2 = reduced.mapPartitions(lambda x: ["K="+str(k)+",V="+str(v) for (k,v) in x])
+    rdd2.collect()
+    print(rdd2.toDebugString)
+    ```
+  
+    * 랜덤함수를 통해 5개의 파티션으로 구성된 rdd1 생성하고 Pair RDD 매핑
+    * `reduceByKey`를 통해 Key별로 Value를 합산하고 
+    * 각 파티션을 매핑하여 파티션을 제거하고 문자열로 구성
+  
+* 넓은 의존 관계(셔플)
 
+#### 스테이지 & 태스크
+
+* 셔플링이 발생하는 지점을 기준으로 스테이지로 나눈다.
+* 스테이지 결과를 중간 파일 형태로 저장
+* 각 스테이지와 파티션별로 태스크를 생성해 실행자에 전달
+  * 스테이지가 셔플리으로 끝나는 경우, 태스크를 `셔플 - 맵`태스크라고 한다.
+  * 스테이지의 모든 태스크가 완료되면 다음 스테이지의 태스크 생성
+* 마지막 스테이지의 태스트가 `결과 태스크`
+
+#### 체크포인트
+
+* 장애 발생 이전에 저장된 스냅샷을 사용해 이 지점부터 다시 계산
+* 체크포인팅을 실행하면 RDD의 데이터와 계보를 모드 저장한 후, 의존 관계와 부모 RDD 정보 삭제
+* `checkpoint`
+* `SparkContextsetCheckpointDir` 데이터를 저장할 디렉터리 지정
+* `DAG`가ㅏ 길어질 때 사용
+
+## 5. 누적 변수와 공유 변수
+
+* 누적 변수는 스파크 프로그램의 전역 상태를 유지
+* 공유 변수로 태그크 및 파티션이 공통으로 사용하는 데이터를 공유
