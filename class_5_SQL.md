@@ -157,3 +157,36 @@
   ```
 
   * 스키마, 컬럼명, 데이터 타입 확인
+  
+  
+
+### DataFrame API
+
+* DataFrame의 `DSL`과 RDB의 `SQL`과 유사한 기능
+* RDD와 마찬가지로 `불변성`과 `지연 실행`
+  * 반드시 새로운 DataFrame으로 변환
+
+#### select
+
+```python
+postsDf = PostDfStruct
+postsIdBody = postsDf.select("id", "body")
+postsIdBody.show(5)
+```
+
+* `id`와 `body` 컬럼 select
+
+  * ```python
+    postsIdBody = postsDf.select(postsDf["id"], postsDf["body"])
+    ```
+
+  * 같은 결과
+
+#### drop
+
+```python
+postIds = postsIdBody.drop("body")
+```
+
+* 
+
