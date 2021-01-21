@@ -188,5 +188,71 @@ postsIdBody.show(5)
 postIds = postsIdBody.drop("body")
 ```
 
-* 
+* 선택한 하나의 컬럼을 제외한 컬럼 반환
+
+#### filter
+
+* `where`과 동일하게 동작
+
+```python
+from pyspark.sql.functions import *
+postsIdBody.filter(instr(postsIdBody["body"], "Italiano") > 0).count()
+```
+
+* `body`컬럼에 `Italiano`란 단어가 포함되어 있는 행의 count
+* `instr()`특정 단어의 위치를 찾아주는 함수
+
+```python
+noAnswer = postsDf.filter((postsDf["postTypeId"] == 1) & isnull(postsDf["acceptedAnswerId"]))
+```
+
+* `postTypeId` 1 : 질문
+* `acceptedAnswerId`가 `NULL`
+* 채택된 답변이 없는 질문만 필터링
+
+```python
+TenQs = postsDf.filter(postsDf["postTypeId"] == 1).limit(10)
+```
+
+* `상위 10개`의 질문을 담은 `DataFrame`
+
+#### withColumn
+
+* `withColumnRenamed(변경할 컬럼 이름, 새로운 이름)`
+
+  * ```python
+    TenQsRn = TenQs.withColumnRenamed("ownerUserId", "owner")
+    ```
+
+  * `ownerUserId` 컬럼을 `owner`으로 변경
+
+* `withColumn(추가할 컬럼 이름, 계산식)`
+
+  * ```python
+    postsDf.filter(postsDf.postTypeId == 1).withColumn("ratio", postsDf.viewCount / postsDf.score).where("ratio < 35").show()
+    ```
+
+  * `viewCount` / `score`를 계산해서 `ratio`생성
+
+  * `ratio`가 35 미만인 질문
+
+#### 정렬
+
+* 한 개 이상으 컬럼 이름 또는 `Column` 표현식을 받고 이를 기준으로 데이터를 정렬
+* `Column` 클래스에 asc나 desc 연산자를 통해 오름차순, 내림차순 지정 가능, default = asc
+
+* `orderBy`
+* `sort`
+
+```python
+postsDf.filter(postsDf.postTypeId == 1).orderBy(postsDf.lastActivityDate.desc()).limit(10).show()
+```
+
+```python
+postsDf.filter(postsDf.postTypeId == 1).orderBy(postsDf.lastActivityDate.desc()).limit(10).show()
+```
+
+* 같은 결과
+* 마지막 수정 날짜를 기준으로 내림차순 정렬
+* 최근에 수정한 상위 열 개 질문 출력
 
