@@ -256,13 +256,27 @@ postsDf.filter(postsDf.postTypeId == 1).orderBy(postsDf.lastActivityDate.desc())
 * 마지막 수정 날짜를 기준으로 내림차순 정렬
 * 최근에 수정한 상위 열 개 질문 출력
 
-#### 연산
+
+
+### 연산
 
 * 스파크 SQL 함수는 DataFrame API나 SQL 표현식으로 사용 가능
 * **스칼라 함수** : 각 로우의 단일 컬럼 또는 여러 컬럼 값을 계산해 단일 값을 반환하는 함수
+  * `abs`, `exp`, `substring` 등
 * **집계 함수** : 로우의 그룹에서 단일 값을 계산하는 함수
+  * `max`, `min`, `avg` 등
+  * 집계 함수는 보통 groupBy와 함께 쓰지만 select나 withColumn 메서드에 사용하면 전체 데이터셋을 대상으로 값을 집계할 수 있다.
 * **윈도 함수** : 로우의 그룹에서 여러 결과 값을 계산하는 함수
 * **사용자 정의 함수** : 커스텀 스칼라 함수 또는 커스텀 집계 함수
-* 
+
+```python
+from pyspark.sql.functions import *
+
+postsDf.filter(postsDf.postTypeId == 1).withColumn("activePeriod", datediff(postsDf.lastActivityDate, postsDf.creationDate)).orderBy(desc("activePeriod")).head().body.replace("&lt;","<").replace("&gt;",">")
+```
+
+* `lastActivityDate`, `creationDate`두 날짜 간의 차이 계산
+* `activePeriod`으로 내림차순 정렬
+* 가장 오랜 기간 논의된 질문
 
 
