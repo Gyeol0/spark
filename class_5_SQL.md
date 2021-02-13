@@ -269,6 +269,8 @@ postsDf.filter(postsDf.postTypeId == 1).orderBy(postsDf.lastActivityDate.desc())
 * **윈도 함수** : 로우의 그룹에서 여러 결과 값을 계산하는 함수
 * **사용자 정의 함수** : 커스텀 스칼라 함수 또는 커스텀 집계 함수
 
+#### 스칼라 및 집계 함수
+
 ```python
 from pyspark.sql.functions import *
 
@@ -279,4 +281,9 @@ postsDf.filter(postsDf.postTypeId == 1).withColumn("activePeriod", datediff(post
 * `activePeriod`으로 내림차순 정렬
 * 가장 오랜 기간 논의된 질문
 
+```python
+postsDf.select(avg(postsDf.score), max(postsDf.score), count(postsDf.score)).show()
+```
+
+* `score`의 평균, 최댓값, count
 
