@@ -409,4 +409,143 @@ postsRdd = postsDf.rdd
 
 * DataFrame 데이터와 파티션을 map이나 flatMap, mapPartitions 변환 연산자 등으로 매핑하면 실제 매핑 작업은 하부 RDD에서 실행되어, 변환 연산의 결과 또한 새로운 DataFrame이 아니라 새로운 RDD가 된다.
 * DataFrame의 변환 연산자는 DataFrame 스키마(즉, RDD 스키마)를 변경할 수 있다.
-* 
+  * 칼럼 순서, 개수 타입 변경 가능
+  * RDD의 Row 객체를 다른 타입으로 변환 가능
+  * 그러나 타입을 변경한 RDD를 다시 DataFrame으로 변환하는 과정 자동화 불가
+  * 변환 연산자가 DataFrame 스키마를 변경하지 않으면, DataFrame의 이전 스키마를 그대로 사용해 새 DataFrame 생성 가능
+
+```python
+def replaceLtGt(row):
+	return Row(
+	  commentCount = row.commentCount,
+    lastActivityDate = row.lastActivityDate,
+    ownerUserId = row.ownerUserId,
+    body = row.body.replace("&lt;","<").replace("&gt;",">"),
+    score = row.score,
+    creationDate = row.creationDate,
+    viewCount = row.viewCount,
+    title = row.title,
+    tags = row.tags.replace("&lt;","<").replace("&gt;",">"),
+    answerCount = row.answerCount,
+    acceptedAnswerId = row.acceptedAnswerId,
+    postTypeId = row.postTypeId,
+    id = row.id)
+
+postsMapped = postsRdd.map(replaceLtGt)
+```
+
+* 각 로우를 매핑하여 **body**와 **tags** 문자열 변환
+* 후에 다시 DataFrame으로 변환
+
+```python
+def sortSchema(schema):
+	fields = {f.name: f for f in schema.fields}
+	names = sorted(fields.keys())
+	return StructType([fields[f] for f in names])
+
+postsDfNew = sqlContext.createDataFrame(postsMapped, sortSchema(postsDf.schema))
+```
+
+* 그러나 DatafFrame API의 내장 함수, 사용자 정의 함수를 통해 대부분의 매핑 작업을 수행할 수 있기 때문에 RDD로 변환하지 않고 바로 적용할 수 있다.
+
+
+
+### 데이터 그루핑
+
+* SQL의 **GROUP BY**와 비슷
+* 칼럼 이름 또는 **Column** 객체의 목록을 받고 **GroupedData** 객체를 반환
+* **GroupedData** 는 groupBy에 지정한 칼럼들의 값이 모두 동일한 로우 그룹들을 표현한 객체
+* 집계 함수를 통해 **groupBy**에 지정한 칼럼들과 집계 결과를 저장한 추가 칼럼으로 구성된 DataFrame 반환
+
+```python
+postsDfNew.groupBy(postsDfNew.ownerUserId, postsDfNew.tags, postsDfNew.postTypeId).count().orderBy(postsDfNew.ownerUserId.desc()).show(10)
+```
+
+* 작성자, 관련 태그, 포스트의 유형별로 포스트 개수 집계
+* 작정자 ID 기준으로 내림차순 정렬
+
+```python
+postsDfNew.groupBy(postsDfNew.ownerUserId).agg(max(postsDfNew.lastActivityDate), max(postsDfNew.score)).show(10)
+```
+
+* **agg** 함수를 사용해 서로 다른 칼럼의 여러 집계 연산 수행
+* Map 객체를 전달해도 가능
+* 작성자별로 마지막 수정 날짜, 최고 점수 산출
+
+```python
+postsDfNew.groupBy(postsDfNew.ownerUserId).agg({"lastActivityDate": "max", "score": "max"}).show(10)
+```
+
+* 위 코드와 동일
+
+```python
+postsDfNew.groupBy(postsDfNew.ownerUserId).agg(max(postsDfNew.lastActivityDate), max(postsDfNew.score) > 5).show(10)
+```
+
+* 첫 번째 표현식이 더 유연하고 다른 표현식과 연결이 가능하다.
+
+#### 사용자 정의 집계 함수
+
+* 추상 클래스를 상속한 새로운 클래스를 선언한 후, 이 클래스에 입력 스키마와 버퍼 스키마를 정의
+* **initialize**, **update**, **merge**, **evaluate** 함수를 구현하는 과정을 거친다.
+
+#### rollup과 cube
+
+* 지정된 칼럼의 부분 집합을 추가로 사용해 집계 연산을 수행
+* **cube**는 칼럼의 모든 조합을 대상으로 계산
+* **rollup**은 지정된 칼럼 순서를 고려한 순열 사용
+
+```python
+smplDf = postsDfNew.where((postsDfNew.ownerUserId >= 13) & (postsDfNew.ownerUserId <= 15))
+smplDf.groupBy(smplDf.ownerUserId, smplDf.tags, smplDf.postTypeId).count().show()
+```
+
+```python
+smplDf.rollup(smplDf.ownerUserId, smplDf.tags, smplDf.postTypeId).count().show()
+```
+
+* **rollup**은 groupBy가 반환한 결과에 작성자별 부분 집계 결과, 작성자 및 관련 태그별 부분 집계 결과, 전체 집계 결과를 추가
+
+```python
+smplDf.cube(smplDf.ownerUserId, smplDf.tags, smplDf.postTypeId).count().show()
+```
+
+* **cube**는 **rollup** 결과에 나머지 부분 집계 결과들을 추가
+
+
+
+### 데이터 조인
+
+* 칼럼 이름을 조인 기준으로 사용할 때는 해당 칼럼이 양쪽에 모두 있어야 한다.
+* 조인 기준으로 사용할 칼럼 이름이 서로 다르면 **Column** 정의를 사용해야 한다.
+
+```python
+itVotesRaw = sc.textFile("edition/ch05/italianVotes.csv").map(lambda x: x.split("~"))
+itVotesRows = itVotesRaw.map(lambda row: Row(id=int(row[0]), postId=int(row[1]), voteTypeId=int(row[2]), creationDate=datetime.strptime(row[3], "%Y-%m-%d %H:%M:%S.%f")))
+votesSchema = StructType([
+  StructField("id", IntegerType(), False),
+  StructField("postId", IntegerType(), False),
+  StructField("voteTypeId", IntegerType(), False),
+  StructField("creationDate", TimestampType(), False)
+  ])  
+
+votesDf = sqlContext.createDataFrame(itVotesRows, votesSchema)
+```
+
+* 데이터 불러오기
+* DataFrame으로 변환
+
+```python
+postsVotes = postsDf.join(votesDf, postsDf.id == votesDf.postId)
+```
+
+* **id**를 기준으로 조인
+* 칼럼 이름이 다르기 때문에 `postsDf.id == votesDf.postId`
+
+```python
+postsVotesOuter = postsDf.join(votesDf, postsDf.id == votesDf.postId, "outer")
+```
+
+* outer 조인
+* **id**, **postId**에 null 값이 포함되어 있음
+* null 값도 포함하여 조인
