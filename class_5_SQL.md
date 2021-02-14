@@ -292,3 +292,121 @@ postsDf.select(avg(postsDf.score), max(postsDf.score), count(postsDf.score)).sho
 #### 윈도 함수
 
 * 집계 함수와 유사하지만 단일 결과로만 그루핑하지 않는다.
+* **프레임**을 정의할 수 있다.
+* **프레임**은 윈도 함수가 현재 처리하는 로우와 관련된 다른 로우 집합으로 정의하며, 이 집합을 현재 로우 계산에 활용할 수 있다.
+* 이동평균이나 누적 합 등을 계산
+* 보통 서브쿼리를 사용하여 계산하지만 윈도 함수를 이용하여 간단하게 계산 가능
+* 사용
+  1. 집계 함수나 랭킹 함수, 분서 함수 중 하나를 사용해 Column 정의를 구성
+  2. 윈도 사양(WindowSpec 객체)을 생성하고 Column의 over 함수에 인수로 전달
+  3. over 함수는 이 윈도 사양을 사용하는 윈도 칼럼을 정의해 반환
+* 윈도 사양을 생성하는 방법
+  1. `partitionBy` 메서드 사용하여 단일 칼럼 또는 복수 칼럼을 파티션의 분할 기준으로 지정
+  2. `orderBy` 메서드로 파티션의 로우를 정렬할 기준을 지정
+  3. `partitionBy`와 `orderBy`를 모두 사용
+* `rowsBetween(from, to)` `rangeBetween(from, to)` 함수로 프레임에 포함될 로우를 추가적으로 제한 가능
+  * `rowsBetween`는 상대 순번, 현재 처리하고 있는 로우 기준
+
+```python
+from pyspark.sql.window import Window
+
+winDf = postsDf.filter(postsDf.postTypeId == 1).select(postsDf.ownerUserId, postsDf.acceptedAnswerId, postsDf.score, max(postsDf.score).over(Window.partitionBy(postsDf.ownerUserId)).alias("maxPerUser"))
+
+winDf.withColumn("toMax", winDf.maxPerUser - winDf.score).show(10)
+```
+
+```python
+max(postsDf.score).over(Window.partitionBy(postsDf.ownerUserId)).alias("maxPerUser")
+```
+
+* `ownerUserId`을 기준으로`score`의 최대값, 별칭 `maxPerUser`
+* `postTypeId`가 1인 사용자가 올린 질문 중 최고 점수를 계산하고, 해당 사용자가 게시한 다른 질문의 점수와 최고 점수 간 차이
+
+
+
+```python
+postsDf.filter(postsDf.postTypeId == 1).select(postsDf.ownerUserId, postsDf.id, postsDf.creationDate, lag(postsDf.id, 1).over(Window.partitionBy(postsDf.ownerUserId).orderBy(postsDf.creationDate)).alias("prev"), lead(postsDf.id, 1).over(Window.partitionBy(postsDf.ownerUserId).orderBy(postsDf.creationDate)).alias("next")).orderBy(postsDf.ownerUserId, postsDf.id).show()
+
+```
+
+* `postTypeId`가 1인 사용자가 올린 질문 중 생성 날짜를 기준으로 질문자가 한 바로 전 질문과 바로 다음 질문의 ID를 각 질문별로 출력
+
+* `lag(column, offset, [default])` : 프레임에 포함된 로우 중에서 현재 로우를 기준으로 offset만큼 뒤에 있는 로우 값을 반환, 로우가 없을 시에는 default 반환
+* `lead(column, offset, [default])` : 프레임에 포함된 로우 중에서 현재 로우를 기준으로 offset만큼 앞에 있는 로우 값을 반환, 로우가 없을 시에는 default 반환
+
+* `creationDate`를 기준으로 정렬하고 `lag`를 통해 prev 질문, `lead`를 통해 next 질문
+
+
+
+#### 사용자 정의 함수
+
+* 스파크에서 지원하지 않는 특정 기능이 필요할 때 사용
+* **function** 객체의 **udf** 함수로 생성
+* **udf** 인자로 필요한 로직 전달, 최대 10개까지 가능
+
+```python
+countTags = udf(lambda tags: tags.count("&lt;"), IntegerType())
+postsDf.filter(postsDf.postTypeId == 1).select("tags", countTags(postsDf.tags).alias("tagCnt")).show(10, False)
+```
+
+* `countTags` 정의 : &lt count, IntegerType
+* `postTypeId`이 1인 사용자가 올린 질문 중에서 태그 개수
+* `show` 메서드의 두 번째 인자를 **False**로 하면 출력된 문자열을 중략하지 않도록 한다. 지정하지 않으면 앞쪽 20개 문자까지만 출력하고 나머지는 중략
+
+
+
+### 결측값
+
+* N/A, unknown, null, 비어 있는 경우
+* DataFrame의 DataFrameNaFunctions를 활용해 결측 값 인스턴스 처리
+* 처리 방법
+  1. 제거
+  2.  다른 상수로 채워 넣기
+  3. 다른 상수로 치환
+
+#### 제거
+
+* **drop** 메서드를 인수 없이 호출하면 최소 하나 이상의 칼럼이 na를 가지는 모든 로우 삭제
+
+```python
+cleanPosts = postsDf.na.drop()
+cleanPosts.count()
+```
+
+* **drop** 인자로 `'any'`이면 칼럼 하나라도 null이면, `'all'`이면 모든 칼러이 null이면
+* 특정 칼럼 지정 가능
+
+#### 채워 넣기
+
+```python
+postsDf.na.fill({"viewCount": 0}).show()
+```
+
+* **fill** 함수를 사용해 다른 상수 또는 문자열 상수로 채울 수 있다.
+* `viewCount` 칼럼의 null 값을 0으로 채움
+
+#### 치환
+
+```python
+postsDf.na.replace(1177, 3000, ["id", "acceptedAnswerId"]).show()
+```
+
+* **replace** 함수를 사용해 특정 칼럼의 특정 값을 다른 값으로 치환
+
+* `id`, `acceptedAnswerId` 1177번을 3000번으로 치환
+
+
+
+### RDD 변환
+
+* 반대로 DataFrame을 RDD로 변환
+
+```python
+postsRdd = postsDf.rdd
+```
+
+* 변환된 RDD는 org.apache.spark.sql.Row 타입의 요소로 구성
+
+* DataFrame 데이터와 파티션을 map이나 flatMap, mapPartitions 변환 연산자 등으로 매핑하면 실제 매핑 작업은 하부 RDD에서 실행되어, 변환 연산의 결과 또한 새로운 DataFrame이 아니라 새로운 RDD가 된다.
+* DataFrame의 변환 연산자는 DataFrame 스키마(즉, RDD 스키마)를 변경할 수 있다.
+* 
