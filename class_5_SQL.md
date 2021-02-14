@@ -269,6 +269,8 @@ postsDf.filter(postsDf.postTypeId == 1).orderBy(postsDf.lastActivityDate.desc())
 * **윈도 함수** : 로우의 그룹에서 여러 결과 값을 계산하는 함수
 * **사용자 정의 함수** : 커스텀 스칼라 함수 또는 커스텀 집계 함수
 
+
+
 #### 스칼라 및 집계 함수
 
 ```python
@@ -287,3 +289,6 @@ postsDf.select(avg(postsDf.score), max(postsDf.score), count(postsDf.score)).sho
 
 * `score`의 평균, 최댓값, count
 
+#### 윈도 함수
+
+* 집계 함수와 유사하지만 단일 결과로만 그루핑하지 않는다.
