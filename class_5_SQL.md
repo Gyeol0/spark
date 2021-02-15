@@ -567,3 +567,81 @@ postsVotesOuter = postsDf.join(votesDf, postsDf.id == votesDf.postId, "outer")
 * 하이브 쿼리 언어(HQL)
 
 ### 테이블 카탈로그와 하이브 메타스토어
+
+* 스파크는 사용ㅈ가 등록한 테이블 정보를 **테이블 카탈로그**에 저장
+* 하이브 지원 기능이 없는 스파크에서는 테이블 카탈로그를 단순한 인-메모리 Map으로 구현하여, 등록된 테이블 정보를 드라이버의 메모리에만 저장하고 스파크 세션이 종료되면 사라진다.
+* 하이브를 지원하는 **SparkSession**에서는 테이브 카탈로그가 하이브 메타스토어를 기반으로 구현
+* 하이브 메타스토어는 영구적인 데이터 베이스, 새로 시작해도 DataFrame 정보 유지
+
+
+
+#### 테이블 임시 등록
+
+```python
+postsDf.registerTempTable("posts_temp")
+```
+
+* **posts_temp**라는 이름으로 테이블 임시 등록
+
+#### 테이블 영구 등록
+
+```python
+postsDf.write.saveAsTable("posts")
+votesDf.write.saveAsTable("votes")
+```
+
+* DataFrame의 **write** 메서드로 영구 테이블 등록
+* **HiveContext**는 **metastore_db** 폴더 아래 로컬 작업 디렉터리에 **Derby** 데이터베이스를 생성
+* hive-site.xml 파일의 hive.metastore.warehouse.dir에 원하는 경로 지정 가능
+
+#### 테이블 카탈로그
+
+```python
+spark.catalog.listTables()
+```
+
+* 등록되어 있는 테이블 목록
+* **isTemporary** 칼럼 True = 임시 테이블, False= 영구 테이블
+
+* **tableType**=MANAGED, 스파크가 해당 테이블의 데이터까지 관리
+  * EXTERNAL은 다른 시스템(ex RDBMS)으로 관리하는 테이블
+
+```python
+spark.catalog.listColumns("votes")
+```
+
+* 특정 테이브르이 칼럼 정보 조회
+
+
+
+### SQL 쿼리
+
+* 스파크 SQL을 통해 ALTER TABLE, DROP TABLE 등 DDL 가능
+
+```python
+resultDf = sqlContext.sql("select * from posts")
+```
+
+* 결과 또한 DataFrame
+
+```python
+select substring(title, 0, 70) from posts where postTypeId = 1 order by creationDate desc limit 3;
+```
+
+* spark-sql 명령어로 SQL 셸 진입
+* 가장 최근에 게시된 질문 제목 3개 출력
+
+```
+spark-sql -e "select substring(title, 0, 70) from posts where postTypeId = 1 order by creationDate desc limit 3"
+```
+
+* SQL 셸이 들어가지 않고 터미널(ubuntu)에서 바로 실행 가능
+
+
+
+### 쓰리프트 서버로 스파크 SQL 접속
+
+* JDBC, ODBC 서버를 이용해 원격지에서 SQL 명령 실행 가능
+* 쓰리프트 서버를 이용해 관계형 데이터베이스와 통신할 수 있는 모든 애플리케이션 사용 가능
+* 쓰리프트 서버로 전달된 SQL 쿼리는 DataFrame으로 변환 후, RDD 연산으로 변환해 실행하고 실행결과는 다시 JDBC 프로토콜로 반환
+* 참조하는 DataFrame은 미리 하이브 메타스토에서 영구 등록해야 한다.
