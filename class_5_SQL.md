@@ -549,3 +549,21 @@ postsVotesOuter = postsDf.join(votesDf, postsDf.id == votesDf.postId, "outer")
 * outer 조인
 * **id**, **postId**에 null 값이 포함되어 있음
 * null 값도 포함하여 조인
+
+
+
+## 5. 2 Dataset
+
+* 도메인 객체에 대한 변환 연산을 손쉽게 표현할 수 있는 API 지원
+* 스파크 SQL 실행 엔진의 빠른 성능과 높은 안정성 제공
+
+* 메서드 호출 시 Encoder 객체 전달
+
+
+
+## 5.3 SQL
+
+* 스파크 전용 SQL
+* 하이브 쿼리 언어(HQL)
+
+### 테이블 카탈로그와 하이브 메타스토어
