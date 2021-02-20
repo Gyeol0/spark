@@ -679,3 +679,117 @@ spark-sql -e "select substring(title, 0, 70) from posts where postTypeId = 1 ord
 * 각 데이터 타입에 특화된 Serializer를 사용하여 데이터를 효율적 저장
   * Zlib 또는 Snappy 형식의 압축
 
+#### Parquet
+
+* 불필요한 의존 관계를 가지지 않으며 특정 프레임워크에 종속되지 않음
+* 독립성
+* 칼럼형 포맷이며 데이터 압축 가능
+  * 칼럼별로 압축 방식을 지정할 수 있음
+* 중첩된 복합 데이터 구조에 중점을 두고 설게되어서 ORC 파일 포맷보다 이러한 중첩 구조의 데이터 셋을 더 효율적으로 다룰 수 있음
+* 각 칼럼의 청크별로 최솟값과 최댓값의 통계ㅡㄹㄹ 저장해 쿼리를 실행할 때 일부 데이터를 건너뛸 수 있도록 연산을 최적화
+* 스파크의 기본 데이터 소스
+
+
+
+### 데이터 저장
+
+#### Writer
+
+* foramt : 데이터를 저장할 파일 포맷, 데이터 소스 이름 지정(jsom, parquet, orc)
+  * default : parquet
+* mode : 지정된 테이블 또는 파일이 이미 존재하면 이에 대응해 데이터를 저장할 방식을 지정
+  * overwrite
+  * append
+  * ignore
+  * error
+  * default : error
+* option, options : 데이터 소스를 설정할 매개변수 이름과 변수 값을 추가
+  * options 메서드에서는 매개변수의 이름-값 쌍을 Map 형태로 전달
+* partitionBy : 복수의 파티션 칼럼을 지정
+
+#### saveAsTable
+
+* DataFrame의 데이터는 write 필드로 제공되는 DataFrameWriter 객체를 사용해 저장
+
+```python
+postsDf.write.format("json").saveAsTable("postsjson")
+
+sqlContext.sql("select * from postsjson")
+```
+
+* `json` 형태로 저장
+* `save`나 `insertInto` 메서드로도 데이터 저장 가능
+  * `save`는 데이터를 파일에 저장
+  * 나머지는 하이브 테이블로 저장하며 메타스토어 활용
+
+#### insertInto
+
+* 이미 하이브 메타스토어에 존재하는 테이블을 지정해야 한다.
+* 이 테이블과 새로 저장할 DataFrame 스키마가 서로 같아야 한다.
+* 테이블의 스키마가 DataFrame과 다르면 예외가 발생
+* 테이블이 이미 존재하고 포맷도 결정했기 때문에 format과 option에 전달한 매개변수들은 insertInto 메서드에 사용하지 않음
+
+#### save
+
+* 하이브 메타스토어 사용하지 않고 데이터를 직접 파일 시스템에 저장
+
+#### jdbc 메서드로 관계형 데이터 베이스에 데이터 저장
+
+```python
+props = {"user": "user", "password": "password"}
+postsDf.write.jdbc("jdbc:postgresql:#postgresrv/mydb", "posts", properties=props)
+```
+
+* mydb 데이터베이스 아래에 posts라는 PostgreSQL 테이블로 저장
+* 데이터베이스 접속에 필요한 속성 `props`
+
+* DataFrame의 파티션이 너무 많으면 부담
+  * 모든 파티션이 관계형 데이터베이스와 연결해 각자 데이터를 저장하기 때문
+
+
+
+### 데이터 불러오기
+
+* 데이터 저장과 사용법 동일
+* schema 함수로 DataFrame 스키마를 지정할 수 있다는 차이점
+* 스키마를 직접 지정하면 그만큼 연산 속도 향상
+* `read`, `load`
+  * `save`와 `load` 비슷
+
+```python
+postsDf = sqlContext.read.table("posts")
+postsDf = sqlContext.table("posts")
+```
+
+
+
+#### jdbc 메서드로 관계형 데이터베이스에서 데이터 불러오기
+
+```python
+result = sqlContext.read.jdbc("jdbc:postgresql:#postgresrv/mydb", "posts", predicates=["viewCount > 3"], properties=props)
+```
+
+* 데이터를 저장할 때와 비슷하지만, 조건절(**WHERE**)을 통해 불러올 데이터셋 범위 축소 가능
+* 최소 조회 수를 세 번 이상 기록한 포스트
+
+#### sql 메서드로 등록한 데이터 소스에서 데이터 불러오기
+
+```python
+sqlContext.sql("CREATE TEMPORARY TABLE postsjdbc "+
+  "USING org.apache.spark.sql.jdbc "+
+  "OPTIONS ("+
+    "url 'jdbc:postgresql:#postgresrv/mydb',"+
+    "dbtable 'posts',"+
+    "user 'user',"+
+    "password 'password')")
+resParq = sql("select * from postsParquet")
+```
+
+```python
+sqlContext.sql("CREATE TEMPORARY TABLE postsParquet "+
+  "USING org.apache.spark.sql.parquet "+
+  "OPTIONS (path '/path/to/parquet_file')")
+resParq = sql("select * from postsParquet")
+```
+
+* 이 방법으로는 조건절 지정 불가능
