@@ -761,8 +761,6 @@ postsDf = sqlContext.read.table("posts")
 postsDf = sqlContext.table("posts")
 ```
 
-
-
 #### jdbc 메서드로 관계형 데이터베이스에서 데이터 불러오기
 
 ```python
@@ -793,3 +791,4 @@ resParq = sql("select * from postsParquet")
 ```
 
 * 이 방법으로는 조건절 지정 불가능
+* 
