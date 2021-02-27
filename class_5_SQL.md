@@ -791,4 +791,3 @@ resParq = sql("select * from postsParquet")
 ```
 
 * 이 방법으로는 조건절 지정 불가능
-* 
