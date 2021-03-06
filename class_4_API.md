@@ -4,7 +4,7 @@
 
 # 4장 스파크 API
 
-## 1. Pari RDD
+## 1. Pair RDD
 
 ### 1.1 Pair RDD
 
@@ -210,7 +210,7 @@ transByCust = transByCust.union(sc.parallelize(complTrans).map(t => (t(2).toInt,
 transByCust.map(t => t._2.mkString("#")).saveAsTextFile("ch04output-transByCust")
 ```
 
-```pthon
+```python
 complTrans += [["2015-03-30", "11:59 PM", "76", "63", "1", "0.00"]]
 transByCust = transByCust.union(sc.parallelize(complTrans).map(lambda t: (int(t[2]), t)))
 transByCust.map(lambda t: "#".join(t[1])).saveAsTextFile("ch04output-transByCust")
