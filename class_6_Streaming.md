@@ -72,5 +72,14 @@ def parseOrder(line):
 orders = filestream.flatMap(parseOrder)
 ```
 
+### 거래 주문 집계
 
+* 2-요소 튜플로 구성된 RDD는 PairRDDFunctions 인스턴스로 암시적 변환
 
+```python
+from operator import add
+numPerType = orders.map(lambda x: (x['buy'], 1)).reduceByKey(add)
+numPerType.repartition(1).saveAsTextFiles("/home/gyeol/ch06output/output.txt")
+```
+
+* PairDStreamFunctions에는 countByKey 함수가 없으므로, 1을 추가하여 동일 키 합(add)
