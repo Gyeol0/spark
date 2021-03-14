@@ -46,11 +46,3 @@ bsdLines.foreach(lambda bLine: print(bLine))
 
 ### 2.1.2 RDD의 개념
 
-
-
-
-
-*
-
-*
-
